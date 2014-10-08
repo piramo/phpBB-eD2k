@@ -1,0 +1,287 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<?xml-stylesheet type="text/xsl" href="modx.prosilver.en.xsl"?>
+<!--NOTICE: Please open this file in your web browser. If presented with a security warning, you may safely tell it to allow the blocked content.-->
+<!--For security purposes, please check: http://www.phpbb.com/mods/ for the latest version of this MOD.\nAlthough MODs are checked before being allowed in the MODs Database there is no guarantee that there are no security problems within the MOD.\nNo support will be given for MODs not found within the MODs Database which can be found at http://www.phpbb.com/mods/-->
+<mod xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="https://www.phpbb.com/mods/xml/modx-1.2.6.xsd">
+	<header>
+		<meta name="generator" content="MODX file generated with PP MODX Creator by tumba25 (online version)"/>
+		<license><![CDATA[GNU General Public License v2]]></license>
+		<title lang="en"><![CDATA[eD2k links processing with availability statistics]]></title>
+		<title lang="es"><![CDATA[Procesador de enlaces eD2k con estadísticas]]></title>
+		<author-group>
+			<author>
+				<username><![CDATA[Meithar]]></username>
+			</author>
+			<author>
+				<username><![CDATA[Piramo]]></username>
+				<homepage><![CDATA[http://www.rebeldemule.org]]></homepage>
+			</author>
+			<author>
+				<username phpbbcom="no"><![CDATA[Bill Hicks]]></username>
+			</author>
+			<author>
+				<username><![CDATA[C0de_m0nkey]]></username>
+			</author>
+		</author-group>
+		<mod-version>1.2</mod-version>
+		<installation>
+			<level>easy</level>
+			<time>300</time>
+			<target-version>3.0.12</target-version>
+		</installation>
+	</header>
+	<action-group>
+		<copy>
+			<file from="images/stats.gif" to="images/stats.gif"/>
+			<file from="images/donkey.gif" to="images/donkey.gif"/>
+		</copy>
+		<open src="posting.php">
+			<edit>
+				<find><![CDATA[		unset($attachment_data);
+	}]]></find>
+				<action type="after-add"><![CDATA[	// eD2k links processing
+	$preview_message = process_ed2k($preview_message);]]></action>
+			</edit>
+		</open>
+		<open src="viewtopic.php">
+			<edit>
+				<find><![CDATA[	$message = smiley_text($message);]]></find>
+				<action type="after-add"><![CDATA[	// eD2k links processing
+	$message = process_ed2k($message);
+	// eD2k Add all links feature
+	$message = make_addalled2k_link($message, $row['post_id']);]]></action>
+			</edit>
+		</open>
+		<open src="includes/functions.php">
+			<edit>
+				<find><![CDATA[			$scheme = ($mode == 'url') ? '[a-z\d+\-.]' : '[a-z\d+]'; // avoid automatic parsing of "word" in "last word.http://..."
+			// generated with regex generation file in the develop folder
+			return "[a-z]$scheme*:/{2}(?:(?:[a-z0-9\-._~!$&'($inline*+,;=:@|]+|%[\dA-F]{2})+|[0-9.]+|\[[a-z0-9.]+:[a-z0-9.]+:[a-z0-9.:]+\])(?::\d*)?(?:/(?:[a-z0-9\-._~!$&'($inline*+,;=:@|]+|%[\dA-F]{2})*)*(?:\?(?:[a-z0-9\-._~!$&'($inline*+,;=:@/?|]+|%[\dA-F]{2})*)?(?:\#(?:[a-z0-9\-._~!$&'($inline*+,;=:@/?|]+|%[\dA-F]{2})*)?";]]></find>
+				<action type="replace-with"><![CDATA[			return "(irc|ftp|http|https):/{2}(?:(?:[a-z0-9\-._~!$&'($inline*+,;=:@|]+|%[\dA-F]{2})+|[0-9.]+|\[[a-z0-9.]+:[a-z0-9.]+:[a-z0-9.:]+\])(?::\d*)?(?:/(?:[a-z0-9\-._~!$&'($inline*+,;=:@|]+|%[\dA-F]{2})*)*(?:\?(?:[a-z0-9\-._~!$&'($inline*+,;=:@/?|]+|%[\dA-F]{2})*)?(?:\#(?:[a-z0-9\-._~!$&'($inline*+,;=:@/?|]+|%[\dA-F]{2})*)?";]]></action>
+			</edit>
+		</open>
+		<open src="includes/functions_content.php">
+			<edit>
+				<find><![CDATA[		'text'			=> $text
+	);
+}]]></find>
+				<action type="after-add"><![CDATA[// eD2k links processing
+function humanize_size ($size, $rounder = 0)
+{
+	$sizes		= array('Bytes', 'Kb', 'Mb', 'Gb', 'Tb', 'Pb', 'Eb', 'Zb', 'Yb');
+	$rounders	= array(0, 1, 2, 2, 2, 3, 3, 3, 3);
+	$ext		= $sizes[0];
+	$rnd		= $rounders[0];
+
+	if ($size < 1024)
+	{
+		$rounder	= 0;
+		$format		= '%.' . $rounder . 'f Bytes';
+	}
+	else
+	{
+		for ($i = 1, $cnt = count($sizes); ($i < $cnt && $size >= 1024); $i++)
+		{
+			$size	= $size / 1024;
+			$ext	= $sizes[$i];
+			$rnd	= $rounders[$i];
+			$format	= '%.' . $rnd . 'f ' . $ext;
+		}
+	}
+
+	if (!$rounder)
+	{
+		$rounder = $rnd;
+	}
+
+	return sprintf($format, round($size, $rounder));
+}
+
+function ed2k_link_callback ($m)
+{
+	$max_len	= 100;
+	$href		= 'href="' . $m[2] . '" class="postlink"';
+	$fname		= rawurldecode($m[3]);
+	$fname		= preg_replace('/&amp;/i', '&', $fname);
+	$size		= humanize_size($m[4]);
+
+	if (strlen($fname) > $max_len)
+	{
+		$fname = substr($fname, 0, $max_len - 19) . '...' . substr($fname, -16);
+	}
+	if (preg_match('#[<>"]#', $fname))
+	{
+		$fname = htmlspecialchars($fname);
+	}
+
+	return "<img src='/foro/images/donkey.gif' border='0' title='donkey link' style='vertical-align: text-bottom;' />&nbsp;<a $href>$fname&nbsp;&nbsp;[$size]</a> <a href='http://ed2k.shortypower.org/?hash=$m[5]' target='_blank'><img src='/foro/images/stats.gif' border='0' title='Estadísticas eLink' style='vertical-align: text-bottom;' /></a>";
+//	return "<img src='/foro/images/donkey.gif' border='0' title='donkey link' style='vertical-align: text-bottom;' />&nbsp;<a $href>$fname&nbsp;&nbsp;[$size]</a> <a href='http://edk.peerates.net/check.php?p=$m[5]' target='_blank'><img src='/foro/images/stats.gif' border='0' title='Estadísticas eLink' style='vertical-align: text-bottom;' /></a>";
+}
+
+function process_ed2k($text)
+{
+	// pad it with a space so we can match things at the start of the 1st line.
+	$ret = ' ' . $text;
+
+	// Patterns and replacements for URL processing
+	$patterns = array();
+	$replacements = array();
+
+	// [url]ed2k://|file|...[/url] code
+	$patterns[] 	= '#\[url\](ed2k://\|file\|(.*?)\|\d+\|\w+\|(h=\w+\|)?/?)\[/url\]#is';
+	$replacements[] = '<a href="$1" class="postlink">$2</a>';
+	// [url=ed2k://|file|...]name[/url] code
+	$patterns[] 	= '#\[url=(ed2k://\|file\|(.*?)\|\d+\|\w+\|(h=\w+\|)?/?)\](.*?)\[/url\]#si';
+	$replacements[] = '<a href="$1" class="postlink">$4</a>';
+	// [url]ed2k://|server|ip|port|/[/url] code
+	$patterns[] 	= '#\[url\](ed2k://\|server\|([\d\.]+?)\|(\d+?)\|/?)\[/url\]#si';
+	$replacements[] = 'ed2k server: <a href="$1" class="postlink">$2:$3</a>';
+	// [url=ed2k://|server|ip|port|/]name[/url] code
+	$patterns[] 	= '#\[url=(ed2k://\|server\|[\d\.]+\|\d+\|/?)\](.*?)\[/url\]#si';
+	$replacements[] = '<a href="$1" class="postlink">$2</a>';
+	// [url]ed2k://|friend|name|ip|port|/[/url] code
+	$patterns[] 	= '#\[url\](ed2k://\|friend\|(.*?)\|[\d\.]+\|\d+\|/?)\[/url\]#si';
+	$replacements[] = 'ed2k friend: <a href="$1" class="postlink">$2</a>';
+	// [url=ed2k://|friend|name|ip|port|/]name[/url] code
+	$patterns[] 	= '#\[url=(ed2k://\|friend\|(.*?)\|[\d\.]+\|\d+\|/?)\](.*?)\[/url\]#si';
+	$replacements[] = '<a href="$1" class="postlink">$3</a>';
+
+	$ret = preg_replace($patterns, $replacements, $ret);
+
+	$ret = preg_replace_callback("#(^|(?<=[^\w\"']))(ed2k://\|file\|([^\\/\|:<>\*\?\"]+?)\|(\d+?)\|([a-f0-9]{32})\|(.*?)/?)(?![\"'])(?=([,\.]*?[\s<\[])|[,\.]*?$)#i", "ed2k_link_callback", $ret);
+	// ed2k://|server|serverIP|serverPort
+	$ret = preg_replace("#(^|(?<=[^\w\"']))(ed2k://\|server\|([\d\.]+?)\|(\d+?)\|/?)#i", "ed2k server: <a href=\"\\2\" class=\"postLink\">\\3:\\4</a>", $ret);
+	// ed2k://|friend|name|clientIP|clientPort
+	$ret = preg_replace("#(^|(?<=[^\w\"']))(ed2k://\|friend\|([^\\/\|:<>\*\?\"]+?)\|([\d\.]+?)\|(\d+?)\|/?)#i", "ed2k friend: <a href=\"\\2\" class=\"postLink\">\\3</a>", $ret);
+	// -- END --
+
+	// Remove our padding..
+	$ret = substr($ret, 1);
+
+	return($ret);
+}
+
+// eD2k Add all links feature
+function make_addalled2k_link($text, $post_id)
+{
+	// padding
+	$ret = ' ' . $text;
+
+	// dig through the message for all ed2k links
+	// split up by "ed2k:"
+	$ed2k_raw = explode('ed2k://', $text);
+
+	// The first item is garbage
+	unset($ed2k_raw[0]);
+
+	// no need to dig through it if there are not at least 2 links
+	$ed2k_possibles = count($ed2k_raw);
+	if ($ed2k_possibles > 1)
+	{
+		unset($ed2k_real_links);
+		foreach ($ed2k_raw as $ed2k_raw_line)
+		{
+			$ed2k_parts = explode('|', $ed2k_raw_line);
+			// This looks now like this (only important parts included)
+			/*
+			[1]=>
+			string(4) "file"
+			[2]=>
+			string(46) "filename.extension"
+			[3]=>
+			string(9) "321456789"
+			[4]=>
+			string(32) "112233445566778899AABBCCDDEEFF11"
+			[5]=>
+			string(?) "source or AICH hash"
+			*/
+
+			// Check the obvious things
+			if (strlen($ed2k_parts[1]) == 4 AND $ed2k_parts[1] == 'file' AND strlen($ed2k_parts[2]) > 0 AND floatval($ed2k_parts[3]) > 0 AND strlen($ed2k_parts[4]) == 32)
+			{
+				// This is a true link, lets paste it together and put it in an array
+				if (substr($ed2k_parts[5], 0, 2) == 'h=' || substr($ed2k_parts[5], 0, 7) == 'sources')
+				{
+					$ed2k_real_links[] = 'ed2k://|file|' . str_replace('\'', '\\\'', $ed2k_parts[2]) . '|' . $ed2k_parts[3] . '|' . $ed2k_parts[4] . '|' . $ed2k_parts[5] . '|/';
+				}
+				else
+				{
+					$ed2k_real_links[] = 'ed2k://|file|' . str_replace('\'', '\\\'', $ed2k_parts[2]) . '|' . $ed2k_parts[3] . '|' . $ed2k_parts[4] . '|/';
+				}
+			}
+		}
+
+		// Now lets see if we have 2 or more links
+		// Only then, we do our little trick, because otherwise, it would be wasted for one link alone
+		$ed2k_confirmed = count($ed2k_real_links);
+		if ($ed2k_confirmed > 1)
+		{
+			$ed2k_insert = '<br /><br />';
+			$ed2k_insert .= '<SCRIPT>';
+			$ed2k_insert .= 'filearray' . $post_id . '=new Array;';
+			$ed2k_insert .= 'n=0;';
+			$i = 0;
+			foreach($ed2k_real_links as $ed2k_link)
+			{
+				$ed2k_insert .= 'filearray' . $post_id . '[' . $i . ']=\'' . $ed2k_link . '\';';
+				$i++;
+			}
+			$ed2k_insert .= 'iv=false;';
+			$ed2k_insert .= 'function addfile' . $post_id . '()';
+			$ed2k_insert .= '{';
+			$ed2k_insert .= '	var s=filearray' . $post_id . '[n];';
+			$ed2k_insert .= '	n++;';
+			$ed2k_insert .= '	if(n==filearray' . $post_id . '.length && iv)';
+			$ed2k_insert .= '	{';
+			$ed2k_insert .= '		top.clearInterval(iv);';
+			$ed2k_insert .= '		n=0;';
+			$ed2k_insert .= ' 	}';
+			$ed2k_insert .= '	top.document.location=s;';
+			$ed2k_insert .= '	return true;';
+			$ed2k_insert .= '}';
+			$ed2k_insert .= 'function addall' . $post_id . '(){iv=top.setInterval("addfile' . $post_id . '()",250)}';
+			$ed2k_insert .= '</SCRIPT>';
+			$ed2k_insert .= '<span class="gensmall"><a href="javascript:addall' . $post_id. '()" class="postlink">[ Add all ' . $ed2k_confirmed . ' links to your ed2k client ]</a></span>';
+			$ret = $ret . $ed2k_insert;
+		}
+	}
+
+	// remove padding
+	$ret = substr($ret, 1);
+
+	return($ret);
+}]]></action>
+			</edit>
+		</open>
+		<open src="includes/mcp/mcp_post.php">
+			<edit>
+				<find><![CDATA[	$message = smiley_text($message);]]></find>
+				<action type="after-add"><![CDATA[	// eD2k links processing
+	$message = process_ed2k($message);]]></action>
+			</edit>
+		</open>
+		<open src="includes/mcp/mcp_topic.php">
+			<edit>
+				<find><![CDATA[		$message = smiley_text($message);]]></find>
+				<action type="after-add"><![CDATA[		// eD2k links processing
+		$message = process_ed2k($message);]]></action>
+			</edit>
+		</open>
+		<open src="includes/ucp/ucp_pm_compose.php">
+			<edit>
+				<find><![CDATA[		$preview_subject = censor_text($subject);]]></find>
+				<action type="after-add"><![CDATA[		// eD2k links processing
+		$preview_message = process_ed2k($preview_message);]]></action>
+			</edit>
+		</open>
+		<open src="includes/ucp/ucp_pm_viewmessage.php">
+			<edit>
+				<find><![CDATA[	$url = append_sid("{$phpbb_root_path}ucp.$phpEx", 'i=pm');]]></find>
+				<action type="after-add"><![CDATA[	// eD2k links processing
+	$message = process_ed2k($message);]]></action>
+			</edit>
+		</open>
+		<diy-instructions lang="en"><![CDATA[Remember to refresh your template(s) and purge your cache.]]></diy-instructions>
+		<diy-instructions lang="es"><![CDATA[Recuerda actualizar tu plantilla y purgar la caché.]]></diy-instructions>
+	</action-group>
+</mod>
